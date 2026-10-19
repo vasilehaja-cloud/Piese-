@@ -1,0 +1,107 @@
+
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Piese Camion</title>
+<style>
+body{font:16px Arial;background:#f1f4f8;color:#17283e;margin:0;padding:16px}
+header{background:#15283f;color:white;padding:18px;border-radius:12px}
+section{background:white;padding:14px;margin:12px 0;border-radius:12px}
+input,select,button{width:100%;padding:12px;margin:5px 0;box-sizing:border-box;font-size:16px;border-radius:8px}
+input,select{border:1px solid #ccd4df}
+button{background:#2463eb;color:white;border:0;font-weight:bold}
+.item{border-bottom:1px solid #ddd;padding:12px 0}
+small{color:#58677a}
+</style>
+</head>
+<body>
+<header><h2>🚚 Piese Camion</h2>Gestiune stocuri și vânzări</header>
+
+<section>
+<h3>Adaugă piesă</h3>
+<input id="n" placeholder="Denumire piesă">
+<input id="b" placeholder="Marcă (ex. DAF)">
+<input id="c" placeholder="Cod produs / cod de bare">
+<input id="q" type="number" min="0" placeholder="Cantitate">
+<input id="a" type="number" min="0" step=".01" placeholder="Preț achiziție (lei)">
+<input id="p" type="number" min="0" step=".01" placeholder="Preț vânzare (lei)">
+<button onclick="add()">Salvează piesa</button>
+</section>
+
+<section>
+<h3>Înregistrează vânzare</h3>
+<select id="s"></select>
+<input id="sq" type="number" min="1" value="1" placeholder="Cantitate vândută">
+<button onclick="sell()">Înregistrează vânzarea</button>
+<div id="msg"></div>
+</section>
+
+<section>
+<h3>Stocuri</h3>
+<input id="find" placeholder="Caută piesă sau cod" oninput="render()">
+<div id="stock"></div>
+</section>
+
+<section>
+<h3>Rezumat</h3>
+<div id="summary"></div>
+<button onclick="backup()">Descarcă backup</button>
+</section>
+
+<script>
+let products=[],sales=[];
+try{
+ products=JSON.parse(localStorage.getItem('pc_products')||'[]');
+ sales=JSON.parse(localStorage.getItem('pc_sales')||'[]');
+}catch(e){}
+const el=id=>document.getElementById(id);
+const lei=n=>Number(n).toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})+' lei';
+function save(){
+ localStorage.setItem('pc_products',JSON.stringify(products));
+ localStorage.setItem('pc_sales',JSON.stringify(sales));
+ render();
+}
+function add(){
+ let name=el('n').value.trim(),qty=Number(el('q').value),
+ buy=Number(el('a').value||0),price=Number(el('p').value);
+ if(!name||el('q').value===''||el('p').value===''||qty<0||price<0||buy<0)
+ return alert('Completează denumirea, cantitatea și prețul.');
+ let code=el('c').value.trim();
+ if(code&&products.some(x=>x.code===code))return alert('Codul există deja.');
+ products.push({id:Date.now(),name,brand:el('b').value.trim(),code,qty,buy,price});
+ ['n','b','c','q','a','p'].forEach(x=>el(x).value='');
+ save();alert('Piesa a fost salvată.');
+}
+function sell(){
+ let id=Number(el('s').value),p=products.find(x=>x.id===id),qty=Number(el('sq').value);
+ if(!p)return alert('Adaugă mai întâi o piesă.');
+ if(!Number.isInteger(qty)||qty<1||qty>p.qty)return alert('Cantitate invalidă sau stoc insuficient.');
+ p.qty-=qty;
+ sales.push({name:p.name,qty,total:qty*p.price,date:new Date().toLocaleString('ro-RO')});
+ save();el('msg').textContent='Vânzare înregistrată: '+lei(qty*p.price);
+}
+function render(){
+ let term=(el('find').value||'').toLowerCase();
+ el('stock').innerHTML=products.filter(p=>(p.name+' '+p.brand+' '+p.code).toLowerCase().includes(term)).map(p=>
+ '<div class="item"><b>'+safe(p.name)+'</b><br><small>'+safe(p.brand)+' · Cod: '+safe(p.code||'—')+'</small><br>Stoc: <b>'+p.qty+'</b> buc. · Vânzare: '+lei(p.price)+'<br><button onclick="edit('+p.id+')">Modifică stocul</button></div>'
+ ).join('')||'<p>Nu există piese.</p>';
+ el('s').innerHTML=products.filter(p=>p.qty>0).map(p=>'<option value="'+p.id+'">'+safe(p.name)+' (stoc '+p.qty+')</option>').join('');
+ el('summary').innerHTML='Produse: '+products.length+'<br>Bucăți în stoc: '+products.reduce((t,p)=>t+p.qty,0)+'<br>Valoare achiziție stoc: '+lei(products.reduce((t,p)=>t+p.qty*p.buy,0))+'<br>Valoare vânzări înregistrate: '+lei(sales.reduce((t,s)=>t+s.total,0))+'<hr>'+sales.slice(-5).reverse().map(s=>safe(s.date)+' — '+safe(s.name)+' — '+lei(s.total)).join('<br>');
+}
+function edit(id){
+ let p=products.find(x=>x.id===id),v=prompt('Cantitate nouă pentru '+p.name,p.qty);
+ if(v===null)return;
+ if(v.trim()===''||!Number.isInteger(Number(v))||Number(v)<0)return alert('Introdu o cantitate întreagă validă.');
+ p.qty=Number(v);save();
+}
+function safe(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function backup(){
+ let blob=new Blob([JSON.stringify({products,sales},null,2)],{type:'application/json'});
+ let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backup-piese-camion.json';a.click();URL.revokeObjectURL(a.href);
+}
+render();
+</script>
+</body>
+</html>
